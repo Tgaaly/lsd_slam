@@ -31,173 +31,173 @@
 namespace lsd_slam
 {
 
-Undistorter::~Undistorter()
-{
-}
-
-Undistorter* Undistorter::getUndistorterForFile(const char* configFilename)
-{
-	std::string completeFileName = configFilename;
-
-	printf("Reading Calibration from file %s",completeFileName.c_str());
-
-
-	std::ifstream f(completeFileName.c_str());
-	if (!f.good())
+	Undistorter::~Undistorter()
 	{
-		f.close();
+	}
 
-		completeFileName = packagePath+"calib/"+configFilename;
-		printf(" ... not found!\n Trying %s", completeFileName.c_str());
+	Undistorter* Undistorter::getUndistorterForFile(const char* configFilename)
+	{
+		std::string completeFileName = configFilename;
 
-		f.open(completeFileName.c_str());
+		printf("Reading Calibration from file %s",completeFileName.c_str());
 
+
+		std::ifstream f(completeFileName.c_str());
 		if (!f.good())
 		{
-			printf(" ... not found. Cannot operate without calibration, shutting down.\n");
 			f.close();
-			return 0;
+
+			completeFileName = packagePath+"calib/"+configFilename;
+			printf(" ... not found!\n Trying %s", completeFileName.c_str());
+
+			f.open(completeFileName.c_str());
+
+			if (!f.good())
+			{
+				printf(" ... not found. Cannot operate without calibration, shutting down.\n");
+				f.close();
+				return 0;
+			}
+		}
+
+		printf(" ... found!\n");
+
+		std::string l1;
+		std::getline(f,l1);
+		f.close();
+
+
+
+		float ic[10];
+		if(std::sscanf(l1.c_str(), "%f %f %f %f %f %f %f %f",
+			&ic[0], &ic[1], &ic[2], &ic[3], &ic[4],
+			&ic[5], &ic[6], &ic[7]) == 8)
+		{
+			printf("found OpenCV camera model, building rectifier.\n");
+			Undistorter* u = new UndistorterOpenCV(completeFileName.c_str());
+			if(!u->isValid()) return 0;
+			return u;
+		}
+		else
+		{
+			printf("found ATAN camera model, building rectifier.\n");
+			Undistorter* u = new UndistorterPTAM(completeFileName.c_str());
+			if(!u->isValid()) return 0;
+			return u;
 		}
 	}
 
-	printf(" ... found!\n");
 
-	std::string l1;
-	std::getline(f,l1);
-	f.close();
-
-
-
-	float ic[10];
-	if(std::sscanf(l1.c_str(), "%f %f %f %f %f %f %f %f",
-			&ic[0], &ic[1], &ic[2], &ic[3], &ic[4],
-			&ic[5], &ic[6], &ic[7]) == 8)
+	UndistorterPTAM::UndistorterPTAM(const char* configFileName)
 	{
-		printf("found OpenCV camera model, building rectifier.\n");
-		Undistorter* u = new UndistorterOpenCV(completeFileName.c_str());
-		if(!u->isValid()) return 0;
-		return u;
-	}
-	else
-	{
-		printf("found ATAN camera model, building rectifier.\n");
-		Undistorter* u = new UndistorterPTAM(completeFileName.c_str());
-		if(!u->isValid()) return 0;
-		return u;
-	}
-}
+		valid = true;
 
+		remapX = nullptr;
+		remapY = nullptr;
 
-UndistorterPTAM::UndistorterPTAM(const char* configFileName)
-{
-	valid = true;
+		printf("%s\n",configFileName);
 
-	remapX = nullptr;
-	remapY = nullptr;
-
-	
-	
 	// read parameters
-	std::ifstream infile(configFileName);
-	assert(infile.good());
+		std::ifstream infile(configFileName);
+		assert(infile.good());
 
 
-	std::string l1,l2,l3,l4;
+		std::string l1,l2,l3,l4;
 
-	std::getline(infile,l1);
-	std::getline(infile,l2);
-	std::getline(infile,l3);
-	std::getline(infile,l4);
+		std::getline(infile,l1);
+		std::getline(infile,l2);
+		std::getline(infile,l3);
+		std::getline(infile,l4);
 
 
 
 
 	// l1 & l2
-	if(std::sscanf(l1.c_str(), "%f %f %f %f %f", &inputCalibration[0], &inputCalibration[1], &inputCalibration[2], &inputCalibration[3], &inputCalibration[4]) == 5 &&
+		if(std::sscanf(l1.c_str(), "%f %f %f %f %f", &inputCalibration[0], &inputCalibration[1], &inputCalibration[2], &inputCalibration[3], &inputCalibration[4]) == 5 &&
 			std::sscanf(l2.c_str(), "%d %d", &in_width, &in_height) == 2)
-	{
-		printf("Input resolution: %d %d\n",in_width, in_height);
-		printf("In: %f %f %f %f %f\n",
+		{
+			printf("Input resolution: %d %d\n",in_width, in_height);
+			printf("In: %f %f %f %f %f\n",
 				inputCalibration[0], inputCalibration[1], inputCalibration[2], inputCalibration[3], inputCalibration[4]);
-	}
-	else
-	{
-		printf("Failed to read camera calibration (invalid format?)\nCalibration file: %s\n", configFileName);
-		valid = false;
-	}
+		}
+		else
+		{
+			printf("Failed to read camera calibration (invalid format?)\nCalibration file: %s\n", configFileName);
+			valid = false;
+		}
 
 	// l3
-	if(l3 == "crop")
-	{
-		outputCalibration[0] = -1;
-		printf("Out: Crop\n");
-	}
-	else if(l3 == "full")
-	{
-		outputCalibration[0] = -2;
-		printf("Out: Full\n");
-	}
-	else if(l3 == "none")
-	{
-		printf("NO RECTIFICATION\n");
-	}
-	else if(std::sscanf(l3.c_str(), "%f %f %f %f %f", &outputCalibration[0], &outputCalibration[1], &outputCalibration[2], &outputCalibration[3], &outputCalibration[4]) == 5)
-	{
-		printf("Out: %f %f %f %f %f\n",
+		if(l3 == "crop")
+		{
+			outputCalibration[0] = -1;
+			printf("Out: Crop\n");
+		}
+		else if(l3 == "full")
+		{
+			outputCalibration[0] = -2;
+			printf("Out: Full\n");
+		}
+		else if(l3 == "none")
+		{
+			printf("NO RECTIFICATION\n");
+		}
+		else if(std::sscanf(l3.c_str(), "%f %f %f %f %f", &outputCalibration[0], &outputCalibration[1], &outputCalibration[2], &outputCalibration[3], &outputCalibration[4]) == 5)
+		{
+			printf("Out: %f %f %f %f %f\n",
 				outputCalibration[0], outputCalibration[1], outputCalibration[2], outputCalibration[3], outputCalibration[4]);
-	}
-	else
-	{
-		printf("Out: Failed to Read Output pars... not rectifying.\n");
-		valid = false;
-	}
+		}
+		else
+		{
+			printf("Out: Failed to Read Output pars... not rectifying.\n");
+			valid = false;
+		}
 
 
 	// l4
-	if(std::sscanf(l4.c_str(), "%d %d", &out_width, &out_height) == 2)
-	{
-		printf("Output resolution: %d %d\n",out_width, out_height);
-	}
-	else
-	{
-		printf("Out: Failed to Read Output resolution... not rectifying.\n");
-		valid = false;
-	}
+		if(std::sscanf(l4.c_str(), "%d %d", &out_width, &out_height) == 2)
+		{
+			printf("Output resolution: %d %d\n",out_width, out_height);
+		}
+		else
+		{
+			printf("Out: Failed to Read Output resolution... not rectifying.\n");
+			valid = false;
+		}
 
 
 
 
 	// prep warp matrices
-	if(valid)
-	{
-		float dist = inputCalibration[4];
-		float d2t = 2.0f * tan(dist / 2.0f);
+		if(valid)
+		{
+			float dist = inputCalibration[4];
+			float d2t = 2.0f * tan(dist / 2.0f);
 
 		// current camera parameters
-		float fx = inputCalibration[0] * in_width;
-		float fy = inputCalibration[1] * in_height;
-		float cx = inputCalibration[2] * in_width - 0.5;
-		float cy = inputCalibration[3] * in_height - 0.5;
-		
+			float fx = inputCalibration[0] * in_width;
+			float fy = inputCalibration[1] * in_height;
+			float cx = inputCalibration[2] * in_width - 0.5;
+			float cy = inputCalibration[3] * in_height - 0.5;
+
 		// scale calibration parameters to input size
-		double xfactor = in_width / (1.0 * in_width);
-		double yfactor = in_height / (1.0 * in_height);
-		fx = fx * xfactor;
-		fy = fy * yfactor;
-		cx = (cx + 0.5) * xfactor - 0.5;
-		cy = (cy + 0.5) * yfactor - 0.5;
+			double xfactor = in_width / (1.0 * in_width);
+			double yfactor = in_height / (1.0 * in_height);
+			fx = fx * xfactor;
+			fy = fy * yfactor;
+			cx = (cx + 0.5) * xfactor - 0.5;
+			cy = (cy + 0.5) * yfactor - 0.5;
 
 		// output camera parameters
-		float ofx, ofy, ocx, ocy;
+			float ofx, ofy, ocx, ocy;
 
 		// find new camera matrix for "crop" and "full"
-		if (inputCalibration[4] == 0)
-		{
-			ofx = inputCalibration[0] * out_width;
-			ofy = inputCalibration[1] * out_height;
-			ocx = (inputCalibration[2] * out_width) - 0.5;
-			ocy = (inputCalibration[3] * out_height) - 0.5;
-		}
+			if (inputCalibration[4] == 0)
+			{
+				ofx = inputCalibration[0] * out_width;
+				ofy = inputCalibration[1] * out_height;
+				ocx = (inputCalibration[2] * out_width) - 0.5;
+				ocy = (inputCalibration[3] * out_height) - 0.5;
+			}
 		else if(outputCalibration[0] == -1)	// "crop"
 		{
 			// find left-most and right-most radius
@@ -403,9 +403,9 @@ void UndistorterPTAM::undistort(const cv::Mat& image, cv::OutputArray result) co
 
 			// interpolate (bilinear)
 			data[idx] =  xxyy * src[1+in_width]
-			                    + (yy-xxyy) * src[in_width]
-			                    + (xx-xxyy) * src[1]
-			                    + (1-xx-yy+xxyy) * src[0];
+			+ (yy-xxyy) * src[in_width]
+			+ (xx-xxyy) * src[1]
+			+ (1-xx-yy+xxyy) * src[0];
 		}
 	}
 }
@@ -465,13 +465,13 @@ UndistorterOpenCV::UndistorterOpenCV(const char* configFileName)
 	if(std::sscanf(l1.c_str(), "%f %f %f %f %f %f %f %f",
 		&inputCalibration[0], &inputCalibration[1], &inputCalibration[2], &inputCalibration[3], &inputCalibration[4],
 		&inputCalibration[5], &inputCalibration[6], &inputCalibration[7]
-  				) == 8 &&
-			std::sscanf(l2.c_str(), "%d %d", &in_width, &in_height) == 2)
+		) == 8 &&
+		std::sscanf(l2.c_str(), "%d %d", &in_width, &in_height) == 2)
 	{
 		printf("Input resolution: %d %d\n",in_width, in_height);
 		printf("In: %f %f %f %f %f %f %f %f\n",
-				inputCalibration[0], inputCalibration[1], inputCalibration[2], inputCalibration[3], inputCalibration[4],
-				inputCalibration[5], inputCalibration[6], inputCalibration[7]);
+			inputCalibration[0], inputCalibration[1], inputCalibration[2], inputCalibration[3], inputCalibration[4],
+			inputCalibration[5], inputCalibration[6], inputCalibration[7]);
 	}
 	else
 	{
@@ -545,7 +545,7 @@ UndistorterOpenCV::UndistorterOpenCV(const char* configFileName)
 		K_ = cv::getOptimalNewCameraMatrix(originalK_, distCoeffs, cv::Size(in_width, in_height), (outputCalibration == -2) ? 1 : 0, cv::Size(out_width, out_height), nullptr, false);
 		
 		cv::initUndistortRectifyMap(originalK_, distCoeffs, cv::Mat(), K_,
-				cv::Size(out_width, out_height), CV_16SC2, map1, map2);
+			cv::Size(out_width, out_height), CV_16SC2, map1, map2);
 		
 		originalK_.at<double>(0, 0) /= in_width;
 		originalK_.at<double>(0, 2) /= in_width;

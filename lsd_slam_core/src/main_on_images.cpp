@@ -39,44 +39,44 @@
 #include "opencv2/opencv.hpp"
 
 std::string &ltrim(std::string &s) {
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-        return s;
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+	return s;
 }
 std::string &rtrim(std::string &s) {
-        s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
-        return s;
+	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+	return s;
 }
 std::string &trim(std::string &s) {
-        return ltrim(rtrim(s));
+	return ltrim(rtrim(s));
 }
 int getdir (std::string dir, std::vector<std::string> &files)
 {
-    DIR *dp;
-    struct dirent *dirp;
-    if((dp  = opendir(dir.c_str())) == NULL)
-    {
-        return -1;
-    }
+	DIR *dp;
+	struct dirent *dirp;
+	if((dp  = opendir(dir.c_str())) == NULL)
+	{
+		return -1;
+	}
 
-    while ((dirp = readdir(dp)) != NULL) {
-    	std::string name = std::string(dirp->d_name);
+	while ((dirp = readdir(dp)) != NULL) {
+		std::string name = std::string(dirp->d_name);
 
-    	if(name != "." && name != "..")
-    		files.push_back(name);
-    }
-    closedir(dp);
+		if(name != "." && name != "..")
+			files.push_back(name);
+	}
+	closedir(dp);
 
 
-    std::sort(files.begin(), files.end());
+	std::sort(files.begin(), files.end());
 
-    if(dir.at( dir.length() - 1 ) != '/') dir = dir+"/";
+	if(dir.at( dir.length() - 1 ) != '/') dir = dir+"/";
 	for(unsigned int i=0;i<files.size();i++)
 	{
 		if(files[i].at(0) != '/')
 			files[i] = dir + files[i];
 	}
 
-    return files.size();
+	return files.size();
 }
 
 int getFile (std::string source, std::vector<std::string> &files)
@@ -141,13 +141,15 @@ int main( int argc, char** argv )
 
 	// get camera calibration in form of an undistorter object.
 	// if no undistortion is required, the undistorter will just pass images through.
-	std::string calibFile;
+	std::string calibFile = "/home/photobot/catkin_ws/src/lsd_slam/lsd_slam_core/calib/pinhole_example_calib.cfg";
 	Undistorter* undistorter = 0;
-	if(ros::param::get("~calib", calibFile))
-	{
-		 undistorter = Undistorter::getUndistorterForFile(calibFile.c_str());
-		 ros::param::del("~calib");
-	}
+	//if(ros::param::get("~calib", calibFile))
+	//{
+	printf("undistort!\n");
+	undistorter = Undistorter::getUndistorterForFile(calibFile.c_str());
+	//ros::param::del("~calib");
+	printf("undistort!\n");
+	//}
 
 	if(undistorter == 0)
 	{
@@ -157,6 +159,10 @@ int main( int argc, char** argv )
 
 	int w = undistorter->getOutputWidth();
 	int h = undistorter->getOutputHeight();
+
+	printf("%d \n",w);
+	printf("%d \n",h);
+
 
 	int w_inp = undistorter->getInputWidth();
 	int h_inp = undistorter->getInputHeight();
@@ -229,8 +235,8 @@ int main( int argc, char** argv )
 				printf("failed to load image %s! skipping.\n", files[i].c_str());
 			else
 				printf("image %s has wrong dimensions - expecting %d x %d, found %d x %d. Skipping.\n",
-						files[i].c_str(),
-						w,h,imageDist.cols, imageDist.rows);
+					files[i].c_str(),
+					w,h,imageDist.cols, imageDist.rows);
 			continue;
 		}
 		assert(imageDist.type() == CV_8U);
